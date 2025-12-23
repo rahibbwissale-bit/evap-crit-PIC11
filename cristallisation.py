@@ -2,6 +2,18 @@
 import numpy as np
 
 
+def _integrale_trapezes(y, x):
+    """
+    Compatible NumPy (anciennes + nouvelles versions).
+    - NumPy récents : np.trapezoid
+    - NumPy anciens : np.trapz
+    """
+    if hasattr(np, "trapezoid"):
+        return np.trapezoid(y, x)
+    # fallback anciennes versions
+    return np.trapz(y, x)
+
+
 def solubilite(T):
     # T en °C, retourne C* en g/100g solution
     return 64.18 + 0.1337 * T + 5.52e-3 * T**2 - 9.73e-6 * T**3
@@ -27,11 +39,13 @@ def croissance(S, T):
 
 
 def moments(L, n):
-    m0 = np.trapz(n, L)
-    m1 = np.trapz(L * n, L)
-    m2 = np.trapz(L * L * n, L)
+    m0 = _integrale_trapezes(n, L)
+    m1 = _integrale_trapezes(L * n, L)
+    m2 = _integrale_trapezes((L**2) * n, L)
+
     if m0 <= 0:
         return 0.0, 0.0
+
     Lmean = m1 / m0
     var = max(m2 / m0 - Lmean**2, 0.0)
     CV = np.sqrt(var) / Lmean if Lmean > 0 else 0.0
@@ -59,7 +73,9 @@ def simuler_cristallisation_batch(M, C_init, T_init, duree, dt=60.0, profil="lin
         Cs = solubilite(T)
         S = sursaturation(C, Cs)
 
-        mT = np.trapz((L**3) * n, L)
+        # moment "masse" (exemple) basé sur L^3
+        mT = _integrale_trapezes((L**3) * n, L)
+
         B = nucleation(S, mT)
         G = croissance(S, T)
 
