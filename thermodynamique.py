@@ -1,64 +1,42 @@
-"""
-thermodynamique.py
--------------------
-Ce module regroupe les fonctions liées à la thermodynamique :
- - propriétés de l'eau et de la vapeur via CoolProp
- - point d'ébullition
- - chaleur latente
- - élévation du point d'ébullition (EPE) pour le saccharose (corrélation simplifiée)
-
-Bibliothèques utilisées :
- - CoolProp.CoolProp : bibliothèque thermodynamique pour les fluides
- - numpy : pour d'éventuels calculs numériques
-"""
-
-from CoolProp.CoolProp import PropsSI  # Librairie de propriétés thermodynamiques
+# thermodynamique.py
 import numpy as np
 
-
-def enthalpie_eau(T, P):
+def to_float(x, default=0.0):
     """
-    Calcule l'enthalpie spécifique de l'eau (J/kg) à une température T (K) et une pression P (Pa).
-
-    PropsSI("H", "T", T, "P", P, "Water") :
-      - "H" : on demande l'enthalpie
-      - "T" : clé pour la température
-      - "P" : clé pour la pression
-      - "Water" : fluide considéré
+    Force un scalaire float même si x est un tableau numpy.
     """
-    return PropsSI("H", "T", T, "P", P, "Water")
+    try:
+        a = np.asarray(x)
+        if a.size == 0:
+            return float(default)
+        return float(a.reshape(-1)[0])
+    except Exception:
+        return float(default)
 
-
-def chaleur_latente(P):
+def Tsat_water_from_Pbar(Pbar):
     """
-    Calcule la chaleur latente de vaporisation de l'eau (J/kg) à une pression P (Pa).
-
-    On prend la différence entre enthalpie vapeur saturée (Q=1) et liquide saturé (Q=0).
+    Saturation eau (approx) : entrée en bar, sortie en °C
+    Approx simple (suffisant projet PIC)
     """
-    h_v = PropsSI('H', 'P', P, 'Q', 1, 'Water')  # vapeur saturée
-    h_l = PropsSI('H', 'P', P, 'Q', 0, 'Water')  # liquide saturé
-    return h_v - h_l
+    P = max(to_float(Pbar), 0.01)
+    # approximation “soft” : 1 bar -> 100°C ; 3.5 bar -> ~143°C
+    return 100.0 + 43.0 * np.log(P)
 
-
-def point_ebullition(P):
+def latent_heat_kJkg(Tc):
     """
-    Donne la température d'ébullition de l'eau (K) à une pression P (Pa).
-
-    On récupère la température de saturation (Q=0 ou Q=1).
+    Chaleur latente approx (kJ/kg) en fonction de T (°C)
     """
-    return PropsSI("T", "P", P, "Q", 0, "Water")
+    T = to_float(Tc, 100.0)
+    return float(2500.0 - 2.3 * (T - 0.0))
 
-
-def EPE_duhring(concentration_massique):
+def LMTD(dT1, dT2):
     """
-    Élévation du point d'ébullition (EPE) en °C en fonction de la concentration massique de saccharose.
-
-    Ici on utilise une corrélation très simplifiée :
-        EPE = a * C_massique(%)
-    avec a ≈ 0.06 °C par % massique.
-    Par exemple, à 65% : EPE ≈ 3.9°C
-
-    concentration_massique : fraction massique (0.0–1.0)
+    LMTD robuste, sans if sur tableaux.
     """
-    a = 0.06  # coefficient simplifié
-    return a * concentration_massique * 100.0  # °C
+    dT1 = to_float(dT1)
+    dT2 = to_float(dT2)
+    if dT1 <= 0.0 or dT2 <= 0.0:
+        return 0.0
+    if abs(dT1 - dT2) < 1e-9:
+        return float(dT1)
+    return float((dT1 - dT2) / np.log(dT1 / dT2))

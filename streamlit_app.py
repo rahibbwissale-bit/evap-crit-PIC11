@@ -6,7 +6,6 @@ import streamlit as st
 
 from evaporateurs import EvaporateurMultiple
 from cristallisation import simuler_cristallisation_batch
-st.sidebar.success("✅ CI/CD automatique activé - Test réussi !")
 # --- Import robust des fonctions de sensibilité (selon comment tu as nommé dans sensibilite.py)
 try:
     from sensibilite import sensibilite_parametre, sensibilite_2D
