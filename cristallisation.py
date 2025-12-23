@@ -1,23 +1,16 @@
 # cristallisation.py
 import numpy as np
 
-TRAPZ = getattr(np, "trapz", np.trapezoid)  # compat numpy
 
-
-
-def _trapz(y, x):
-    """
-    Intégration trapézoïdale robuste.
-    - NumPy récent: np.trapezoid
-    - Fallback: np.trapz (si dispo)
-    """
-    if hasattr(np, "trapezoid"):
-        return np.trapezoid(y, x)
-    return np.trapz(y, x)
-
-
+# -----------------------------
+# Propriétés thermodynamiques
+# -----------------------------
 def solubilite(T):
-    # T en °C, retourne C* en g/100g solution
+    """
+    Solubilité du saccharose
+    T en °C
+    Retour : Cs en g / 100 g solution
+    """
     return 64.18 + 0.1337 * T + 5.52e-3 * T**2 - 9.73e-6 * T**3
 
 
@@ -25,11 +18,14 @@ def sursaturation(C, Cs):
     return max((C - Cs) / Cs, 0.0)
 
 
+# -----------------------------
+# Cinétiques
+# -----------------------------
 def nucleation(S, mT):
     kb = 1.5e10
     b = 2.5
     j = 0.5
-    return kb * (S**b) * max(mT, 1e-12) ** j
+    return kb * (S ** b) * max(mT, 1e-12) ** j
 
 
 def croissance(S, T):
@@ -37,28 +33,47 @@ def croissance(S, T):
     g = 1.5
     R = 8.314
     Eg = 45000
-    return kg * (S**g) * np.exp(-Eg / (R * (T + 273.15)))
+    return kg * (S ** g) * np.exp(-Eg / (R * (T + 273.15)))
 
 
+# -----------------------------
+# Moments de la population
+# -----------------------------
 def moments(L, n):
-    m0 = _trapz(n, L)
-    m1 = _trapz(L * n, L)
-    m2 = _trapz((L**2) * n, L)
+    m0 = np.trapz(n, L)
+    m1 = np.trapz(L * n, L)
+    m2 = np.trapz(L * L * n, L)
 
     if m0 <= 0:
         return 0.0, 0.0
 
     Lmean = m1 / m0
-    var = max(m2 / m0 - Lmean**2, 0.0)
-    CV = np.sqrt(var) / Lmean if Lmean > 0 else 0.0
+    variance = max(m2 / m0 - Lmean**2, 0.0)
+    CV = np.sqrt(variance) / Lmean if Lmean > 0 else 0.0
+
     return float(Lmean), float(CV)
 
 
-def simuler_cristallisation_batch(M, C_init, T_init, duree, dt=60.0, profil="lineaire"):
+# -----------------------------
+# Simulation batch
+# -----------------------------
+def simuler_cristallisation_batch(
+    M,
+    C_init,
+    T_init,
+    duree,
+    dt=60.0,
+    profil="lineaire"
+):
     """
-    Retourne : L, n(L), hist
-    hist contient toujours : t, T, S, C, Cs, Lmean, CV
+    Simulation d'un cristalliseur batch
+
+    Retourne :
+    - L : tailles de cristaux
+    - n : densité de population
+    - hist : historique temporel
     """
+
     N = 80
     L = np.linspace(0.0, 8e-4, N)
     dL = L[1] - L[0]
@@ -69,17 +84,25 @@ def simuler_cristallisation_batch(M, C_init, T_init, duree, dt=60.0, profil="lin
 
     tvec = np.arange(0, duree + dt, dt)
 
-    hist = {"t": [], "T": [], "S": [], "C": [], "Cs": [], "Lmean": [], "CV": []}
+    hist = {
+        "t": [],
+        "T": [],
+        "S": [],
+        "C": [],
+        "Cs": [],
+        "Lmean": [],
+        "CV": []
+    }
 
     for t in tvec:
         Cs = solubilite(T)
         S = sursaturation(C, Cs)
 
-        mT = _trapz((L**3) * n, L)
+        mT = np.trapz((L**3) * n, L)
         B = nucleation(S, mT)
         G = croissance(S, T)
 
-        # transport (upwind)
+        # Transport de population (upwind)
         if G > 0:
             n_new = np.copy(n)
             for i in range(1, N):
@@ -87,15 +110,15 @@ def simuler_cristallisation_batch(M, C_init, T_init, duree, dt=60.0, profil="lin
             n_new[0] = B / max(G, 1e-12)
             n = np.maximum(n_new, 0.0)
 
-        # évolution concentration (stable)
+        # Évolution concentration
         C = max(C - 0.02 * S * dt / 60.0, Cs)
 
-        # profils de refroidissement
+        # Profil thermique
         if profil == "lineaire":
             T = T_init - (T_init - 35.0) * (t / duree)
         elif profil == "expo":
             T = 35.0 + (T_init - 35.0) * np.exp(-0.003 * t)
-        else:  # "S_const"
+        else:
             T = max(T - 0.3 * (S - 0.05), 35.0)
 
         Lmean, CV = moments(L, n)
