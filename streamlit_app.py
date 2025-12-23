@@ -139,10 +139,54 @@ with tabs[1]:
 with tabs[2]:
     st.subheader("Étude de sensibilité (simple)")
     st.info("À enrichir : variations de xF, xout, P vapeur, nombre d'effets, etc.")
+import streamlit as st
+import numpy as np
+import pandas as pd
+import altair as alt
 
-# -----------------------------
-# TAB 4 — Export
-# -----------------------------
-with tabs[3]:
-    st.subheader("Export")
-    st.write("Export CSV + figures (stable sur Streamlit Cloud).")
+st.subheader("Étude de sensibilité (simple)")
+
+st.info(
+    "Analyse de l’influence du nombre d’effets sur la consommation de vapeur "
+    "et la surface totale d’échange."
+)
+
+# Paramètre étudié
+N_range = st.slider(
+    "Nombre d'effets",
+    min_value=1,
+    max_value=6,
+    value=(2, 5)
+)
+
+# Simulation simple (exemple pédagogique)
+N_vals = np.arange(N_range[0], N_range[1] + 1)
+
+S_vapeur = 15000 / N_vals          # vapeur ↓ quand N ↑
+Surface = 50 * N_vals              # surface ↑ quand N ↑
+
+df = pd.DataFrame({
+    "Nombre d'effets": N_vals,
+    "Débit vapeur (kg/h)": S_vapeur,
+    "Surface totale (m²)": Surface
+})
+
+# Graphique D3 via Altair
+chart = alt.Chart(df).transform_fold(
+    ["Débit vapeur (kg/h)", "Surface totale (m²)"],
+    as_=["Grandeur", "Valeur"]
+).mark_line(point=True).encode(
+    x="Nombre d'effets:O",
+    y="Valeur:Q",
+    color="Grandeur:N",
+    tooltip=["Nombre d'effets", "Grandeur", "Valeur"]
+).properties(
+    width=700,
+    height=400
+)
+
+st.altair_chart(chart, use_container_width=True)
+
+st.success("La page Sensibilité est maintenant fonctionnelle ✅")
+
+
