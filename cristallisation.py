@@ -101,4 +101,4 @@ def simuler_cristallisation_batch(M, C_init, T_init, duree, dt=60.0, profil="lin
         hist["Lmean"].append(float(Lmean))
         hist["CV"].append(float(CV))
 
-    return L, n, hist
+    return L, n, hist  
