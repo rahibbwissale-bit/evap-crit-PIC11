@@ -1,89 +1,99 @@
-# evaporateurs.py
+# cristallisation.py
 import numpy as np
 
-
-def simulation_evaporation_multi_effets(
-    F_kg_h: float,
-    xF: float,
-    xout: float,
-    n_effets: int,
-    T_steam_C: float = 120.0,
-    T_last_C: float = 60.0,
-    U: float = 1500.0,  # W/m2/K
-    lambda_kJ_kg: float = 2257.0
-):
+# ---------- helpers robustes ----------
+def trapz_compat(y, x):
     """
-    Modèle pédagogique (scalaire + valeurs par effet) pour évaporation multiple.
-    Retourne un dict : S, economie, A_total, V_total, P, details (par effet)
+    Compat numpy: utilise np.trapz (numpy 1.x) sans dépendre de np.trapezoid (pas dispo sur anciennes versions).
     """
+    return np.trapz(y, x)
 
-    # sécuriser types
-    F_kg_h = float(F_kg_h)
-    xF = float(xF)
-    xout = float(xout)
-    n = int(n_effets)
-    T_steam_C = float(T_steam_C)
-    T_last_C = float(T_last_C)
-    U = float(U)
-    lambda_kJ_kg = float(lambda_kJ_kg)
+# ---------- modèle ----------
+def solubilite(T):
+    # T en °C, retourne C* en g/100g solution
+    return 64.18 + 0.1337 * T + 5.52e-3 * T**2 - 9.73e-6 * T**3
 
-    if n < 1:
-        raise ValueError("n_effets doit être >= 1")
-    if xF <= 0 or xout <= 0 or xout <= xF:
-        raise ValueError("Vérifier xF et xout (xout doit être > xF).")
-    if T_steam_C <= T_last_C:
-        raise ValueError("T_steam_C doit être > T_last_C.")
-    if U <= 0:
-        raise ValueError("U doit être > 0.")
+def sursaturation(C, Cs):
+    return max((C - Cs) / Cs, 0.0)
 
-    # Bilan matière (soluté conservé)
-    P = F_kg_h * xF / xout            # débit produit (kg/h)
-    V_total = max(F_kg_h - P, 0.0)    # eau évaporée (kg/h)
+def nucleation(S, mT):
+    kb = 1.5e10
+    b = 2.5
+    j = 0.5
+    return kb * (S**b) * max(mT, 1e-12) ** j
 
-    # Répartition uniforme (simple)
-    V_i = V_total / n                 # kg/h par effet
+def croissance(S, T):
+    kg = 2.8e-7
+    g = 1.5
+    R = 8.314
+    Eg = 45000
+    return kg * (S**g) * np.exp(-Eg / (R * (T + 273.15)))
 
-    # Economie vapeur (pédagogique)
-    economie = min(float(n), 6.0)
+def moments(L, n):
+    m0 = trapz_compat(n, L)
+    m1 = trapz_compat(L * n, L)
+    m2 = trapz_compat((L**2) * n, L)
 
-    # Conso vapeur
-    S = V_total / max(economie, 1e-12)
+    if m0 <= 0:
+        return 0.0, 0.0
 
-    # ΔT global et par effet
-    dT_total = T_steam_C - T_last_C
-    dT_i = dT_total / n
+    Lmean = m1 / m0
+    var = max(m2 / m0 - Lmean**2, 0.0)
+    CV = np.sqrt(var) / Lmean if Lmean > 0 else 0.0
+    return float(Lmean), float(CV)
 
-    # Températures par effet (profil linéaire)
-    # Effet 1 : Thot ~ T_steam -> Tcold = Thot - dT_i
-    # Effet n : Tcold ~ T_last
-    T_hot = [T_steam_C - (i - 1) * dT_i for i in range(1, n + 1)]
-    T_cold = [th - dT_i for th in T_hot]
+def simuler_cristallisation_batch(M, C_init, T_init, duree, dt=60.0, profil="lineaire"):
+    """
+    Retourne : L, n(L), hist
+    hist contient : t, T, S, C, Cs, Lmean, CV
+    """
+    N = 80
+    L = np.linspace(0.0, 8e-4, N)
+    dL = L[1] - L[0]
+    n = np.zeros_like(L)
 
-    # Puissance et surfaces par effet
-    # Q_i = V_i * lambda (kJ/kg) -> kW
-    Q_i_kW = (V_i * lambda_kJ_kg) / 3600.0
-    Q_i_W = Q_i_kW * 1000.0
+    T = float(T_init)
+    C = float(C_init)
 
-    # A_i = Q/(U*dT)
-    A_i = Q_i_W / (U * max(dT_i, 1e-9))
-    A_total = A_i * n
+    tvec = np.arange(0, duree + dt, dt)
 
-    details = []
-    for i in range(1, n + 1):
-        details.append({
-            "effect": i,
-            "V_kg_h": float(V_i),
-            "dT_K": float(dT_i),
-            "A_m2": float(A_i),
-            "T_hot_C": float(T_hot[i - 1]),
-            "T_cold_C": float(T_cold[i - 1]),
-        })
+    hist = {"t": [], "T": [], "S": [], "C": [], "Cs": [], "Lmean": [], "CV": []}
 
-    return {
-        "S": float(S),
-        "economie": float(economie),
-        "A_total": float(A_total),
-        "V_total": float(V_total),
-        "P": float(P),
-        "details": details,
-    }
+    for t in tvec:
+        Cs = solubilite(T)
+        S = sursaturation(C, Cs)
+
+        mT = trapz_compat((L**3) * n, L)
+        B = nucleation(S, mT)
+        G = croissance(S, T)
+
+        # transport (upwind)
+        if G > 0:
+            n_new = np.copy(n)
+            for i in range(1, N):
+                n_new[i] = n[i] - dt * G * (n[i] - n[i - 1]) / dL
+            n_new[0] = B / max(G, 1e-12)
+            n = np.maximum(n_new, 0.0)
+
+        # évolution concentration (simple)
+        C = max(C - 0.02 * S * dt / 60.0, Cs)
+
+        # profils de refroidissement
+        if profil == "lineaire":
+            T = T_init - (T_init - 35.0) * (t / duree)
+        elif profil == "expo":
+            T = 35.0 + (T_init - 35.0) * np.exp(-0.003 * t)
+        else:  # "S_const"
+            T = max(T - 0.3 * (S - 0.05), 35.0)
+
+        Lmean, CV = moments(L, n)
+
+        hist["t"].append(float(t))
+        hist["T"].append(float(T))
+        hist["S"].append(float(S))
+        hist["C"].append(float(C))
+        hist["Cs"].append(float(Cs))
+        hist["Lmean"].append(float(Lmean))
+        hist["CV"].append(float(CV))
+
+    return L, n, hist
