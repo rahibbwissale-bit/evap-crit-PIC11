@@ -13,10 +13,8 @@ def solubilite(T):
     # T en °C, retourne C* en g/100g solution
     return 64.18 + 0.1337 * T + 5.52e-3 * T**2 - 9.73e-6 * T**3
 
-
 def sursaturation(C, Cs):
     return max((C - Cs) / Cs, 0.0)
-
 
 def nucleation(S, mT):
     kb = 1.5e10
@@ -24,14 +22,12 @@ def nucleation(S, mT):
     j = 0.5
     return kb * (S**b) * max(mT, 1e-12) ** j
 
-
 def croissance(S, T):
     kg = 2.8e-7
     g = 1.5
     R = 8.314
     Eg = 45000
     return kg * (S**g) * np.exp(-Eg / (R * (T + 273.15)))
-
 
 def moments(L, n):
     m0 = trapz_compat(n, L)
@@ -45,7 +41,6 @@ def moments(L, n):
     var = max(m2 / m0 - Lmean**2, 0.0)
     CV = np.sqrt(var) / Lmean if Lmean > 0 else 0.0
     return float(Lmean), float(CV)
-
 
 def simuler_cristallisation_batch(M, C_init, T_init, duree, dt=60.0, profil="lineaire"):
     """
@@ -102,3 +97,4 @@ def simuler_cristallisation_batch(M, C_init, T_init, duree, dt=60.0, profil="lin
         hist["CV"].append(float(CV))
 
     return L, n, hist
+

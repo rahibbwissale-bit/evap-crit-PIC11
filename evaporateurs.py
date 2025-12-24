@@ -1,7 +1,6 @@
 # evaporateurs.py
 import numpy as np
 
-
 def simulation_evaporation_multi_effets(
     F_kg_h: float,
     xF: float,
