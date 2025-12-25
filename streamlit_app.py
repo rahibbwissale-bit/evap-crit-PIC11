@@ -12,7 +12,7 @@ from sensibilite import analyse_sensibilite_complete
 st.set_page_config(page_title="PIC — Évaporation & Cristallisation", layout="wide")
 
 st.title("🧪 Projet — Évaporation multiple & Cristallisation du saccharose")
-st.caption("Interface web (Streamlit) conforme au CDC PIC 2024-2025")
+st.caption("Interface web (Streamlit)")
 
 # Initialisation session state
 if "evap_res" not in st.session_state:
@@ -700,7 +700,7 @@ with tab_export:
         st.info("""
         **Rapport généré avec les paramètres actuels :**
         
-        1. **Évaporation** : Simulation à 3 effets conforme CDC
+        1. **Évaporation** : Simulation à 3 effets conforme
         2. **Cristallisation** : Profil de refroidissement analysé
         3. **Sensibilité** : Analyses paramétriques complètes
         4. **Économique** : Estimation des coûts d'investissement et d'exploitation
