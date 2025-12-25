@@ -1,11 +1,29 @@
-numpy==1.26.4
+# requirements.txt - Projet PIC 2024-2025
+# Bibliothèques obligatoires CDC
+
+# Calcul scientifique
+numpy>=1.21.0
+pandas>=1.3.0
 scipy>=1.7.0
+
+# Visualisation
 matplotlib>=3.4.0
-CoolProp>=6.4.1
-thermo>=0.2.0
 seaborn>=0.11.0
 plotly>=5.0.0
+altair>=5.0.0
+
+# Thermodynamique (obligatoire CDC)
+CoolProp>=6.4.1
+thermo>=0.2.0
+
+# Interface web
+streamlit>=1.24.0
+
+# Tests
 pytest>=6.2.0
-streamlit==1.41.1
-pandas==2.2.3
-altair==5.5.0
+
+# Interface graphique
+#tkinter  # Inclu avec Python
+
+# Export
+openpyxl>=3.0.0  # Pour Excel si besoin
